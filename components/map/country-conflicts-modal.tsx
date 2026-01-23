@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogHeader,
@@ -9,7 +9,17 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Markdown } from "@/components/ui/markdown";
-import { Loader2, Swords, ExternalLink, Globe, History, AlertTriangle } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Swords,
+  ExternalLink,
+  Globe,
+  History,
+  AlertTriangle,
+  MessageSquare,
+  Database,
+  RotateCw,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CountryConflictsModalProps {
@@ -31,6 +41,52 @@ interface ConflictData {
 
 type TabType = "current" | "past";
 
+function AnswerSkeleton() {
+  return (
+    <div className="rounded-lg border border-border bg-card p-4">
+      <div className="mb-4 flex items-center gap-2">
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-11/12" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-4/5" />
+      </div>
+    </div>
+  );
+}
+
+function SourcesSkeleton() {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Database className="h-4 w-4 text-muted-foreground" />
+        <span className="font-medium text-foreground">Sources</span>
+        <span className="text-sm text-muted-foreground">loading sources...</span>
+      </div>
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-lg border border-border bg-card p-4">
+            <div className="flex items-start gap-3">
+              <Skeleton className="h-6 w-6 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-full" />
+                <div className="flex gap-2 pt-1">
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function CountryConflictsModal({
   country,
   onClose,
@@ -38,8 +94,11 @@ export function CountryConflictsModal({
 }: CountryConflictsModalProps) {
   const [data, setData] = useState<ConflictData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreamingCurrent, setIsStreamingCurrent] = useState(false);
+  const [isStreamingPast, setIsStreamingPast] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("current");
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     if (!country) {
@@ -49,35 +108,137 @@ export function CountryConflictsModal({
       return;
     }
 
-    const fetchConflicts = async () => {
-      setIsLoading(true);
-      onLoadingChange?.(true);
-      setError(null);
-      setActiveTab("current"); // Reset to current tab for new country
+    // Close any existing EventSource
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
 
+    setIsLoading(true);
+    setIsStreamingCurrent(true);
+    setIsStreamingPast(false);
+    onLoadingChange?.(true);
+    setError(null);
+    setActiveTab("current");
+
+    // Initialize data structure
+    setData({
+      country,
+      current: { conflicts: "", sources: [] },
+      past: { conflicts: "", sources: [] },
+    });
+
+    const eventSource = new EventSource(
+      `/api/countries/conflicts?country=${encodeURIComponent(country)}&stream=true`
+    );
+    eventSourceRef.current = eventSource;
+
+    eventSource.onmessage = (event) => {
       try {
-        const response = await fetch(
-          `/api/countries/conflicts?country=${encodeURIComponent(country)}`
-        );
+        const chunk = JSON.parse(event.data);
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch conflict data");
+        switch (chunk.type) {
+          case "current_content":
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    current: {
+                      ...prev.current,
+                      conflicts: prev.current.conflicts + (chunk.content || ""),
+                    },
+                  }
+                : null
+            );
+            break;
+
+          case "current_sources":
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    current: {
+                      ...prev.current,
+                      sources: chunk.sources || [],
+                    },
+                  }
+                : null
+            );
+            setIsStreamingCurrent(false);
+            setIsStreamingPast(true);
+            break;
+
+          case "past_content":
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    past: {
+                      ...prev.past,
+                      conflicts: prev.past.conflicts + (chunk.content || ""),
+                    },
+                  }
+                : null
+            );
+            break;
+
+          case "past_sources":
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    past: {
+                      ...prev.past,
+                      sources: chunk.sources || [],
+                    },
+                  }
+                : null
+            );
+            break;
+
+          case "done":
+            setIsLoading(false);
+            setIsStreamingCurrent(false);
+            setIsStreamingPast(false);
+            onLoadingChange?.(false);
+            eventSource.close();
+            break;
+
+          case "error":
+            setError(chunk.error || "An error occurred");
+            setIsLoading(false);
+            setIsStreamingCurrent(false);
+            setIsStreamingPast(false);
+            onLoadingChange?.(false);
+            eventSource.close();
+            break;
         }
-
-        const result = await response.json();
-        setData(result);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load conflict data"
-        );
-      } finally {
-        setIsLoading(false);
-        onLoadingChange?.(false);
+      } catch {
+        // Ignore JSON parse errors
       }
     };
 
-    fetchConflicts();
+    eventSource.onerror = () => {
+      setError("Connection lost. Please try again.");
+      setIsLoading(false);
+      setIsStreamingCurrent(false);
+      setIsStreamingPast(false);
+      onLoadingChange?.(false);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
   }, [country, onLoadingChange]);
+
+  const isStreaming =
+    (activeTab === "current" && isStreamingCurrent) ||
+    (activeTab === "past" && isStreamingPast);
+
+  // Show skeleton while loading and content hasn't arrived yet
+  // Use isLoading (not isStreaming) so skeleton stays until content actually appears
+  const showAnswerSkeleton = isLoading && !data?.[activeTab].conflicts;
+  const showSourcesSkeleton = isLoading && data?.[activeTab].sources.length === 0;
 
   return (
     <Dialog open={!!country} onClose={onClose}>
@@ -96,22 +257,13 @@ export function CountryConflictsModal({
       </DialogHeader>
 
       <DialogContent className="max-h-[60vh]">
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="mt-4 text-sm text-muted-foreground">
-              Researching conflicts for {country}...
-            </p>
-          </div>
-        )}
-
         {error && (
           <div className="rounded-lg bg-destructive/10 p-4 text-center">
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
-        {data && !isLoading && (
+        {data && (
           <div className="flex h-full flex-col">
             {/* Tabs */}
             <div className="mb-4 flex gap-2 border-b border-border">
@@ -126,6 +278,9 @@ export function CountryConflictsModal({
               >
                 <AlertTriangle className="h-4 w-4" />
                 Current
+                {isStreamingCurrent && (
+                  <RotateCw className="h-3 w-3 animate-spin" />
+                )}
               </button>
               <button
                 onClick={() => setActiveTab("past")}
@@ -138,48 +293,76 @@ export function CountryConflictsModal({
               >
                 <History className="h-4 w-4" />
                 Historical
+                {isStreamingPast && (
+                  <RotateCw className="h-3 w-3 animate-spin" />
+                )}
               </button>
             </div>
 
             {/* Tab Content */}
             <ScrollArea className="flex-1 pr-4">
               <div className="space-y-6">
-                <div className="prose prose-base prose-invert max-w-none">
-                  <Markdown
-                    content={activeTab === "current" ? data.current.conflicts : data.past.conflicts}
-                    className="text-base leading-relaxed"
-                  />
-                </div>
+                {/* Answer Section */}
+                {showAnswerSkeleton ? (
+                  <AnswerSkeleton />
+                ) : data[activeTab].conflicts ? (
+                  <div className="rounded-lg border border-border bg-card p-4">
+                    <div className="mb-4 flex items-center gap-2">  
+                      {isStreaming && (
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          {/* <RotateCw className="h-3 w-3 animate-spin" />
+                          <span>generating</span> */}
+                        </div>
+                      )}
+                    </div>
+                    <div className="prose prose-base prose-invert max-w-none">
+                      <Markdown
+                        content={data[activeTab].conflicts}
+                        className="text-base leading-relaxed"
+                      />
+                      {isStreaming && (
+                        <span className="inline-block h-4 w-1 animate-pulse bg-primary" />
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
-                {(() => {
-                  const sources = activeTab === "current" ? data.current.sources : data.past.sources;
-                  return sources && sources.length > 0 ? (
-                    <div className="border-t border-border pt-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        <h4 className="text-sm font-medium text-foreground">
-                          Sources ({sources.length})
-                        </h4>
-                      </div>
-                      <div className="space-y-2">
-                        {sources.slice(0, 10).map((source, i) => (
-                          <a
-                            key={i}
-                            href={source.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-start gap-2 rounded-md bg-muted/50 p-2 text-sm hover:bg-muted transition-colors"
-                          >
-                            <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                            <span className="line-clamp-2 text-muted-foreground hover:text-foreground">
+                {/* Sources Section */}
+                {showSourcesSkeleton ? (
+                  <SourcesSkeleton />
+                ) : data[activeTab].sources.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-foreground">Sources</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({data[activeTab].sources.length})
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {data[activeTab].sources.slice(0, 10).map((source, i) => (
+                        <a
+                          key={i}
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-sm transition-colors hover:bg-muted/50"
+                        >
+                          <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="flex-1 min-w-0">
+                            <span className="line-clamp-2 text-foreground">
                               {source.title}
                             </span>
-                          </a>
-                        ))}
-                      </div>
+                            <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                              <ExternalLink className="h-3 w-3" />
+                              {new URL(source.url).hostname}
+                            </span>
+                          </div>
+                        </a>
+                      ))}
                     </div>
-                  ) : null;
-                })()}
+                  </div>
+                ) : null}
               </div>
             </ScrollArea>
           </div>

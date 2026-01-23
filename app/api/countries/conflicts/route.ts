@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { getCountryConflicts } from "@/lib/valyu";
+import { getCountryConflicts, streamCountryConflicts } from "@/lib/valyu";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const country = searchParams.get("country");
+  const stream = searchParams.get("stream") === "true";
 
   if (!country) {
     return NextResponse.json(
@@ -14,6 +15,39 @@ export async function GET(request: Request) {
     );
   }
 
+  // Streaming mode - use Server-Sent Events
+  if (stream) {
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of streamCountryConflicts(country)) {
+            const data = `data: ${JSON.stringify(chunk)}\n\n`;
+            controller.enqueue(encoder.encode(data));
+          }
+          controller.close();
+        } catch (error) {
+          const errorData = `data: ${JSON.stringify({
+            type: "error",
+            error: error instanceof Error ? error.message : "Unknown error",
+          })}\n\n`;
+          controller.enqueue(encoder.encode(errorData));
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  // Non-streaming mode - return full response
   try {
     const result = await getCountryConflicts(country);
 

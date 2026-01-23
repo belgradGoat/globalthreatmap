@@ -13,6 +13,34 @@ function getValyuClient(): Valyu {
   return valyuInstance;
 }
 
+function parsePublishedDate(dateValue: unknown): string | undefined {
+  if (!dateValue) return undefined;
+
+  // Handle string dates
+  if (typeof dateValue === "string") {
+    const parsed = new Date(dateValue);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  // Handle Date objects
+  if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+    return dateValue.toISOString();
+  }
+
+  // Handle Unix timestamps (seconds or milliseconds)
+  if (typeof dateValue === "number") {
+    const timestamp = dateValue > 1e12 ? dateValue : dateValue * 1000;
+    const parsed = new Date(timestamp);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return undefined;
+}
+
 export async function searchEvents(
   query: string,
   options?: {
@@ -23,7 +51,7 @@ export async function searchEvents(
   try {
     const valyu = getValyuClient();
     const response = await valyu.search(query, {
-      searchType: "all"                                                                                                                                                                                                                                       ,
+      searchType: "all",
       maxNumResults: options?.maxResults || 20,
     });
 
@@ -31,13 +59,18 @@ export async function searchEvents(
       return [];
     }
 
-    return response.results.map((result) => ({
-      title: result.title || "Untitled",
-      url: result.url || "",
-      content: typeof result.content === "string" ? result.content : "",
-      publishedDate: result.date,
-      source: result.source,
-    }));
+    return response.results.map((result) => {
+      // Valyu returns both 'date' and 'publication_date' fields
+      const dateValue = result.date || result.publication_date;
+
+      return {
+        title: result.title || "Untitled",
+        url: result.url || "",
+        content: typeof result.content === "string" ? result.content : "",
+        publishedDate: parsePublishedDate(dateValue),
+        source: result.source,
+      };
+    });
   } catch (error) {
     console.error("Valyu search error:", error);
     throw error;
@@ -332,4 +365,82 @@ export async function getCountryConflicts(
       })),
     },
   };
+}
+
+export type ConflictStreamChunk = {
+  type: "current_content" | "current_sources" | "past_content" | "past_sources" | "done" | "error";
+  content?: string;
+  sources?: Array<{ title: string; url: string }>;
+  error?: string;
+};
+
+export async function* streamCountryConflicts(
+  country: string
+): AsyncGenerator<ConflictStreamChunk> {
+  const valyu = getValyuClient();
+
+  const currentQuery = `List all current, ongoing, or brewing conflicts, wars, military tensions, and security threats involving ${country} as of 2024-2026. Include active military operations, border disputes, civil unrest, terrorism threats, and geopolitical tensions. If there are no current conflicts, state that clearly.`;
+
+  const pastQuery = `List all major historical wars, conflicts, and military engagements that ${country} has been involved in throughout history (excluding any ongoing conflicts). Include the dates, opposing parties, and brief outcomes for each conflict. Focus on conflicts that have ended.`;
+
+  try {
+    // Stream current conflicts first
+    const currentStream = await valyu.answer(currentQuery, {
+      excludedSources: ["wikipedia.org"],
+      streaming: true,
+    });
+
+    if (Symbol.asyncIterator in (currentStream as object)) {
+      for await (const chunk of currentStream as AsyncGenerator<{
+        type: string;
+        content?: string;
+        search_results?: Array<{ title?: string; url?: string }>;
+      }>) {
+        if (chunk.type === "content" && chunk.content) {
+          yield { type: "current_content", content: chunk.content };
+        } else if (chunk.type === "search_results" && chunk.search_results) {
+          yield {
+            type: "current_sources",
+            sources: chunk.search_results.map((s) => ({
+              title: s.title || "Source",
+              url: s.url || "",
+            })),
+          };
+        }
+      }
+    }
+
+    // Then stream past conflicts
+    const pastStream = await valyu.answer(pastQuery, {
+      excludedSources: ["wikipedia.org"],
+      streaming: true,
+    });
+
+    if (Symbol.asyncIterator in (pastStream as object)) {
+      for await (const chunk of pastStream as AsyncGenerator<{
+        type: string;
+        content?: string;
+        search_results?: Array<{ title?: string; url?: string }>;
+      }>) {
+        if (chunk.type === "content" && chunk.content) {
+          yield { type: "past_content", content: chunk.content };
+        } else if (chunk.type === "search_results" && chunk.search_results) {
+          yield {
+            type: "past_sources",
+            sources: chunk.search_results.map((s) => ({
+              title: s.title || "Source",
+              url: s.url || "",
+            })),
+          };
+        }
+      }
+    }
+
+    yield { type: "done" };
+  } catch (error) {
+    yield {
+      type: "error",
+      error: error instanceof Error ? error.message : "Unknown error occurred",
+    };
+  }
 }

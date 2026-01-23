@@ -3,14 +3,15 @@
 import { useEventsStore } from "@/stores/events-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Globe, RefreshCw, Activity } from "lucide-react";
+import { Globe, RefreshCw, Activity, HelpCircle } from "lucide-react";
 
 interface HeaderProps {
   onRefresh: () => void;
   isLoading: boolean;
+  onShowHelp?: () => void;
 }
 
-export function Header({ onRefresh, isLoading }: HeaderProps) {
+export function Header({ onRefresh, isLoading, onShowHelp }: HeaderProps) {
   const { filteredEvents } = useEventsStore();
 
   const threatCounts = filteredEvents.reduce(
@@ -50,8 +51,18 @@ export function Header({ onRefresh, isLoading }: HeaderProps) {
         <Button
           variant="ghost"
           size="icon"
+          onClick={onShowHelp}
+          title="Show features"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onRefresh}
           disabled={isLoading}
+          title="Refresh events"
         >
           <RefreshCw
             className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
