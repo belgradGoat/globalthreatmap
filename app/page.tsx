@@ -7,13 +7,15 @@ import { Sidebar } from "@/components/sidebar";
 import { ThreatMap } from "@/components/map/threat-map";
 import { TimelineScrubber } from "@/components/map/timeline-scrubber";
 import { WelcomeModal } from "@/components/welcome-modal";
-import { SignInPanel } from "@/components/auth";
+import { SignInPanel, SignInModal } from "@/components/auth";
+import { PolymarketTicker, POLYMARKET_TICKER_HEIGHT } from "@/components/polymarket-ticker";
 
 const WELCOME_DISMISSED_KEY = "globalthreatmap_welcome_dismissed";
 
 export default function Home() {
   const [showWelcome, setShowWelcome] = useState(false);
-  const { isLoading, refresh } = useEvents({
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const { isLoading, refresh, requiresSignIn } = useEvents({
     autoRefresh: true,
     refreshInterval: 300000, // 5 minutes
   });
@@ -25,8 +27,14 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    if (requiresSignIn) {
+      setShowSignInModal(true);
+    }
+  }, [requiresSignIn]);
+
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col" style={{ paddingBottom: POLYMARKET_TICKER_HEIGHT }}>
       <Header
         onRefresh={refresh}
         isLoading={isLoading}
@@ -41,6 +49,8 @@ export default function Home() {
       </div>
       <WelcomeModal open={showWelcome} onOpenChange={setShowWelcome} />
       <SignInPanel />
+      <SignInModal open={showSignInModal} onOpenChange={setShowSignInModal} />
+      <PolymarketTicker category="Politics" />
     </div>
   );
 }

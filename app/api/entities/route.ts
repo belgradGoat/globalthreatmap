@@ -76,9 +76,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extract and geocode locations from the search results (up to 20)
+    // Extract and geocode locations from the search results
     const combinedText = `${entityData.description} ${locationContent}`;
-    const locations = await geocodeLocationsFromText(combinedText, 20);
+    const locations = await geocodeLocationsFromText(combinedText, entityData.name);
 
     // Remove duplicates by placeName
     const uniqueLocations = locations.reduce((acc: GeoLocation[], loc) => {
