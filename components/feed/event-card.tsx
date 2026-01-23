@@ -20,6 +20,10 @@ import {
   Heart,
   Leaf,
   Target,
+  Skull,
+  Anchor,
+  Droplets,
+  ShoppingCart,
 } from "lucide-react";
 
 const categoryIconMap = {
@@ -33,6 +37,10 @@ const categoryIconMap = {
   health: Heart,
   environmental: Leaf,
   military: Target,
+  crime: Skull,
+  piracy: Anchor,
+  infrastructure: Droplets,
+  commodities: ShoppingCart,
 };
 
 interface EventCardProps {
