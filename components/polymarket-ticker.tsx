@@ -8,16 +8,16 @@ interface PolymarketTickerProps {
 }
 
 export function PolymarketTicker({ category = "Politics" }: PolymarketTickerProps) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Polymarket ticker embed URL
   // Categories: Breaking News, Politics, Crypto, Sports, Technology, Finance & Earnings
-  const tickerUrl = `https://ticker.polymarket.com/embed?category=${encodeURIComponent(category)}&theme=dark&speed=1&displayMode=classic&height=48`;
+  const tickerUrl = `https://ticker.polymarket.com/embed?category=${encodeURIComponent(category)}&theme=dark&speed=1&displayMode=classic&height=40`;
 
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border transition-all duration-300 ${
-        isCollapsed ? "h-10" : "h-20"
+        isCollapsed ? "h-10" : "h-24"
       }`}
     >
       {/* Header bar */}
