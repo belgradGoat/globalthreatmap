@@ -90,10 +90,10 @@ export async function GET(request: Request) {
   const query = searchParams.get("q");
 
   try {
-    const searchQueries = query ? [query] : THREAT_QUERIES.slice(0, 6);
+    const searchQueries = query ? [query] : THREAT_QUERIES;
 
     const searchResultsArrays = await Promise.all(
-      searchQueries.map((q) => searchEvents(q, { maxResults: 15 }))
+      searchQueries.map((q) => searchEvents(q, { maxResults: 20 }))
     );
 
     const allResults = searchResultsArrays.flatMap((r) => r.results);
@@ -122,12 +122,12 @@ export async function POST(request: Request) {
     const tokenToUse = selfHosted ? undefined : accessToken;
 
     const searchQueries = queries && Array.isArray(queries) && queries.length > 0
-      ? queries.slice(0, 8)
-      : THREAT_QUERIES.slice(0, 6);
+      ? queries.slice(0, 12)
+      : THREAT_QUERIES;
 
     const searchResultsArrays = await Promise.all(
       searchQueries.map((query: string) =>
-        searchEvents(query, { maxResults: 15, accessToken: tokenToUse })
+        searchEvents(query, { maxResults: 20, accessToken: tokenToUse })
       )
     );
 
