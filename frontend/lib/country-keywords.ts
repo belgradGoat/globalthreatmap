@@ -777,6 +777,8 @@ export function getCountryKeywords(country: string): CountryKeywords {
     'congo_kinshasa': 'dr_congo',
     'zaire': 'dr_congo',
     'ivory_coast': 'cote_divoire',
+    'turkiye': 'turkey',
+    'türkiye': 'turkey',
   };
 
   if (aliases[normalized] && COUNTRY_KEYWORDS[aliases[normalized]]) {

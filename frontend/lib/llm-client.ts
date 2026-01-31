@@ -323,7 +323,7 @@ export function getProviderDefaults(provider: LLMProvider): Partial<LLMSettings>
     case "ollama":
       return {
         serverUrl: "http://localhost:11434",
-        model: "llama3.2",
+        model: "", // User must select a model from available list
       };
     case "openai-compatible":
       return {

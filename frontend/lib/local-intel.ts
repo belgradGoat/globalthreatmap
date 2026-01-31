@@ -221,6 +221,7 @@ const REGION_MAP: Record<string, string[]> = {
   iran: ["middle_east"],
   iraq: ["middle_east"],
   turkey: ["middle_east"],
+  turkiye: ["middle_east"],
   syria: ["middle_east"],
   lebanon: ["middle_east"],
   jordan: ["middle_east"],
@@ -405,6 +406,8 @@ const WEBSCRAPPER_COUNTRY_ALIASES: Record<string, string> = {
   'north macedonia': 'north_macedonia',
   'sri lanka': 'sri_lanka',
   'dr congo': 'dr_congo',
+  'turkiye': 'turkey',
+  'türkiye': 'turkey',
 };
 
 /**
@@ -757,9 +760,12 @@ function formatLLMRequest(
 
   switch (settings.provider) {
     case "ollama":
+      if (!settings.model) {
+        console.error("[LLM] Ollama requires a model name. Please set one in Settings.");
+      }
       return {
         ...baseRequest,
-        model: settings.model || "llama3.2",
+        model: settings.model || "llama3.2", // Fallback, but will fail if model doesn't exist
         options: {
           num_predict: options.maxTokens ?? 2000,
         },
@@ -825,6 +831,8 @@ export async function generateLLMResponse(
     const settings = options?.llmSettings || DEFAULT_LLM_SETTINGS;
     const messages: { role: string; content: string }[] = [];
 
+    console.log(`[LLM] Using provider: ${settings.provider}, URL: ${settings.serverUrl}, model: ${settings.model || "(default)"}`);
+
     if (systemMessage) {
       messages.push({ role: "system", content: systemMessage });
     }
@@ -842,6 +850,8 @@ export async function generateLLMResponse(
     });
     const headers = getLLMHeaders(settings);
 
+    console.log(`[LLM] Calling ${endpoint}`);
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers,
@@ -852,16 +862,20 @@ export async function generateLLMResponse(
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`LLM error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`[LLM] Error response: ${errorText}`);
+      throw new Error(`LLM error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    return parseLLMResponse(settings, data);
+    const content = parseLLMResponse(settings, data);
+    console.log(`[LLM] Got response: ${content.substring(0, 100)}...`);
+    return content;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      console.error("LLM request timed out");
+      console.error("[LLM] Request timed out");
     } else {
-      console.error("LLM error:", error);
+      console.error("[LLM] Error:", error);
     }
     return "";
   }
@@ -992,7 +1006,7 @@ const COUNTRIES = new Set([
   "seychelles", "sierra leone", "singapore", "slovakia", "slovenia", "solomon islands",
   "somalia", "south africa", "south sudan", "spain", "sri lanka", "sudan", "suriname",
   "sweden", "switzerland", "syria", "taiwan", "tajikistan", "tanzania", "thailand",
-  "timor-leste", "togo", "tonga", "trinidad", "tunisia", "turkey", "turkmenistan",
+  "timor-leste", "togo", "tonga", "trinidad", "tunisia", "turkey", "turkiye", "turkmenistan",
   "tuvalu", "uganda", "ukraine", "united arab emirates", "uae", "united kingdom", "uk",
   "united states", "usa", "us", "america", "uruguay", "uzbekistan", "vanuatu",
   "vatican", "venezuela", "vietnam", "yemen", "zambia", "zimbabwe",

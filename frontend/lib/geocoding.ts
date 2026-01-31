@@ -266,6 +266,8 @@ const KNOWN_LOCATIONS: Record<
   Poland: { lat: 51.9194, lng: 19.1451, country: "Poland" },
   Warsaw: { lat: 52.2297, lng: 21.0122, country: "Poland" },
   Turkey: { lat: 38.9637, lng: 35.2433, country: "Turkey" },
+  Turkiye: { lat: 38.9637, lng: 35.2433, country: "Turkey" },
+  Türkiye: { lat: 38.9637, lng: 35.2433, country: "Turkey" },
   Ankara: { lat: 39.9334, lng: 32.8597, country: "Turkey" },
   Istanbul: { lat: 41.0082, lng: 28.9784, country: "Turkey" },
   Greece: { lat: 39.0742, lng: 21.8243, country: "Greece" },

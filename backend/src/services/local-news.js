@@ -76,7 +76,9 @@ const COUNTRY_ALIASES = {
     'south_korea': 'south_korea',
     'korea': 'south_korea',
     'czechia': 'czech',
-    'czech_republic': 'czech'
+    'czech_republic': 'czech',
+    'turkiye': 'turkey',
+    'türkiye': 'turkey'
 };
 
 // Load local news sources

@@ -87,9 +87,29 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     const result = await testConnection(localSettings);
     setTestResult(result);
     setIsTesting(false);
+
+    // Auto-select first model for Ollama if none selected and models available
+    if (
+      result.success &&
+      localSettings.provider === "ollama" &&
+      !localSettings.model &&
+      result.models &&
+      result.models.length > 0
+    ) {
+      setLocalSettings({ ...localSettings, model: result.models[0] });
+    }
   };
 
   const handleSave = () => {
+    // Validate Ollama requires a model
+    if (localSettings.provider === "ollama" && !localSettings.model) {
+      setTestResult({
+        success: false,
+        message: "Ollama requires a model. Please test connection and select a model.",
+      });
+      return;
+    }
+
     setSettings(localSettings);
     if (testResult?.success) {
       setConnectionStatus(true);
@@ -186,28 +206,58 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground">
             Model{" "}
-            <span className="text-muted-foreground font-normal">
-              (optional)
-            </span>
+            {localSettings.provider === "ollama" ? (
+              <span className="text-red-400 font-normal">(required)</span>
+            ) : (
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            )}
           </label>
-          <Input
-            value={localSettings.model}
-            onChange={(e) =>
-              setLocalSettings({ ...localSettings, model: e.target.value })
-            }
-            placeholder={
-              localSettings.provider === "ollama"
-                ? "llama3.2"
-                : localSettings.provider === "openai"
-                ? "gpt-4o-mini"
-                : "Leave empty for server default"
-            }
-          />
-          {testResult?.models && testResult.models.length > 0 && (
+
+          {/* Show dropdown for Ollama if models are available */}
+          {localSettings.provider === "ollama" && testResult?.models && testResult.models.length > 0 ? (
+            <select
+              value={localSettings.model}
+              onChange={(e) =>
+                setLocalSettings({ ...localSettings, model: e.target.value })
+              }
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Select a model...</option>
+              {testResult.models.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              value={localSettings.model}
+              onChange={(e) =>
+                setLocalSettings({ ...localSettings, model: e.target.value })
+              }
+              placeholder={
+                localSettings.provider === "ollama"
+                  ? "Test connection to see available models"
+                  : localSettings.provider === "openai"
+                  ? "gpt-4o-mini"
+                  : "Leave empty for server default"
+              }
+            />
+          )}
+
+          {/* Show available models hint for non-Ollama or when no test done */}
+          {localSettings.provider !== "ollama" && testResult?.models && testResult.models.length > 0 && (
             <div className="text-xs text-muted-foreground">
               Available: {testResult.models.slice(0, 5).join(", ")}
               {testResult.models.length > 5 &&
                 ` +${testResult.models.length - 5} more`}
+            </div>
+          )}
+
+          {/* Hint for Ollama to test connection */}
+          {localSettings.provider === "ollama" && (!testResult?.models || testResult.models.length === 0) && (
+            <div className="text-xs text-yellow-500">
+              Click "Test Connection" to load available models
             </div>
           )}
         </div>
